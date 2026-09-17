@@ -1,0 +1,50 @@
+meta {
+  name: 01-echo-get
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/get?lesson=1
+  body: none
+  auth: inherit
+}
+
+params:query {
+  lesson: 1
+}
+
+assert {
+  @description('запрос завершился успешно')
+  res.status: eq 200
+  @description('сервер вернул JSON')
+  res.headers['content-type']: contains application/json
+  @description('обязательное поле существует')
+  res.body.args.lesson: isDefined
+  @description('поле имеет ожидаемый тип')
+  res.body.args.lesson: isString
+}
+
+tests {
+  test("status is 200", function () {
+    expect(res.getStatus()).to.eql(200);
+  });
+  
+  test("content type is JSON", function () {
+    expect(res.getHeader("content-type")).to.include("application/json");
+  });
+  
+  test("body contains a string lesson argument", function () {
+    const body = res.getBody();
+  
+    expect(body).to.have.property("args");
+    expect(body.args).to.have.property("lesson");
+    expect(body.args.lesson).to.be.a("string");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

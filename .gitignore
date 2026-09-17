@@ -1,0 +1,7 @@
+node_modules/
+reports/
+.env
+.env.*
+!.env.example
+*.secret.bru
+.DS_Store

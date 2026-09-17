@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "fintech-api",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}
