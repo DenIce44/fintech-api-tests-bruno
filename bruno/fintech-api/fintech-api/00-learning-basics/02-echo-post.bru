@@ -1,0 +1,95 @@
+meta {
+  name: 02-echo-post
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/post?lesson=2&mode=practice
+  body: json
+  auth: inherit
+}
+
+params:query {
+  @description('номер занятия')
+  lesson: 2
+  @description(' | режим учебного запроса')
+  mode: practice
+}
+
+headers {
+  @description('формат тела запроса')
+  Content-Type: application/json
+  @description('учебный пользовательский заголовок')
+  X-Lesson: 2
+}
+
+body:json {
+  {
+    "operation": "create-transfer-draft",
+    "amountMinor": 1250,
+    "currency": "USD",
+    "approved": false,
+    "tags": ["lesson-2", "practice"]
+  }
+}
+
+assert {
+  @description('echo-сервис обработал запрос')
+  res.status: eq 200
+  @description('ответ имеет формат JSON')
+  res.headers['content-type']: contains application/json
+  @description('query-параметр вернулся как строка `"2"')
+  res.body.args.lesson: eq "2"
+  @description('второй query-параметр передан')
+  res.body.args.mode: eq practice
+  @description('пользовательский заголовок передан')
+  res.body.headers['x-lesson']: eq "2"
+  @description('операция передана без изменения')
+  res.body.json.operation: eq create-transfer-draft
+  @description('сумма передана числом с нужным значением')
+  res.body.json.amountMinor: eq 1250
+  @description('код валюты передан без изменения')
+  res.body.json.currency: eq USD
+  @description('boolean-значение передано без изменения')
+  res.body.json.approved: eq false
+}
+
+tests {
+  test("status is 200 and response is JSON", function () {
+    expect(res.getStatus()).to.eql(200);
+    expect(res.getHeader("content-type")).to.include("application/json");
+  });
+  
+  test("query parameters are echoed as strings", function () {
+    const body = res.getBody();
+  
+    expect(body.args.lesson).to.eql("2");
+    expect(body.args.mode).to.eql("practice");
+  });
+  
+  test("custom request header is echoed", function () {
+    const body = res.getBody();
+  
+    expect(body.headers["x-lesson"]).to.eql("2");
+  });
+  
+  test("JSON body preserves values and types", function () {
+    const payload = res.getBody().json;
+  
+    expect(payload.operation).to.eql("create-transfer-draft");
+    expect(payload.amountMinor).to.eql(1250);
+    expect(payload.amountMinor).to.be.a("number");
+    expect(payload.currency).to.eql("USD");
+    expect(payload.approved).to.eql(false);
+    expect(payload.approved).to.be.a("boolean");
+    expect(payload.tags).to.be.an("array");
+    expect(payload.tags).to.include.members(["lesson-2", "practice"]);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
