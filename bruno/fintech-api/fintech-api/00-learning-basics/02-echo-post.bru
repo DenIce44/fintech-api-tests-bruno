@@ -30,8 +30,13 @@ body:json {
     "amountMinor": 1250,
     "currency": "USD",
     "approved": false,
-    "tags": ["lesson-2", "practice"]
+    "tags": ["lesson-2", "practice"],
+    "metadata": {
+    "source": "bruno",
+    "attempt": 1
+    }
   }
+  
 }
 
 assert {
@@ -76,6 +81,14 @@ tests {
   
   test("JSON body preserves values and types", function () {
     const payload = res.getBody().json;
+    
+    test("nested metadata object is preserved", function () {
+    const metadata = res.getBody().json.metadata;
+  
+    expect(metadata).to.be.an("object");
+    expect(metadata.source).to.eql("bruno");
+    expect(metadata.attempt).to.eql(1);
+  });
   
     expect(payload.operation).to.eql("create-transfer-draft");
     expect(payload.amountMinor).to.eql(1250);
