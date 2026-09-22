@@ -1,0 +1,61 @@
+meta {
+  name: 08-get-posts-by-user
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{resourceBaseUrl}}/posts?userId={{postUserId}}
+  body: none
+  auth: inherit
+}
+
+params:query {
+  userId: {{postUserId}}
+}
+
+assert {
+  @description('существующий ресурс найден')
+  res.status: eq 200
+  @description('ответ имеет JSON-формат')
+  res.headers['content-type']: contains application/json
+  @description('первый элемент соответствует фильтру')
+  res.body[0].userId: eq 1
+}
+
+tests {
+  test("filtered posts return a non-empty JSON array", function () {
+    const posts = res.getBody();
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(res.getHeader("content-type")).to.include("application/json");
+    expect(posts).to.be.an("array").that.is.not.empty;
+  });
+  
+  test("every post has the expected contract", function () {
+    const posts = res.getBody();
+  
+    posts.forEach(function (post) {
+      expect(post).to.be.an("object");
+      expect(post).to.have.all.keys("userId", "id", "title", "body");
+      expect(post.userId).to.be.a("number");
+      expect(post.id).to.be.a("number");
+      expect(post.title).to.be.a("string").and.not.be.empty;
+      expect(post.body).to.be.a("string").and.not.be.empty;
+    });
+  });
+  
+  test("every returned post matches the requested user", function () {
+    const posts = res.getBody();
+  
+    expect(posts.every(function (post) {
+      return post.userId === 1;
+    })).to.eql(true);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
