@@ -1,0 +1,42 @@
+meta {
+  name: 09-get-empty-posts-filter
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{resourceBaseUrl}}/posts?userId={{missingUserId}}
+  body: none
+  auth: inherit
+}
+
+params:query {
+  userId: {{missingUserId}}
+}
+
+assert {
+  @description('существующий ресурс найден')
+  res.status: eq 200
+  @description('ответ имеет JSON-формат')
+  res.headers['content-type']: contains application/json
+}
+
+tests {
+  test("a valid filter with no matches returns 200", function () {
+    expect(res.getStatus()).to.eql(200);
+    expect(res.getHeader("content-type")).to.include("application/json");
+  });
+  
+  test("a valid filter with no matches returns an empty array", function () {
+    const posts = res.getBody();
+  
+    expect(posts).to.be.an("array");
+    expect(posts).to.have.lengthOf(0);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

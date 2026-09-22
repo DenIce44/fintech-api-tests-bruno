@@ -1,0 +1,54 @@
+meta {
+  name: 05-patch-post
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{resourceBaseUrl}}/posts/{{postId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json;  charset=UTF-8
+}
+
+body:json {
+  {
+    "title": "Lesson 3: partial update"
+  }
+}
+
+assert {
+  @description('существующий ресурс найден')
+  res.status: eq 200
+  @description('ответ имеет JSON-формат')
+  res.headers['content-type']: contains application/json
+  @description('сервер вернул нужный ресурс')
+  res.body.title: eq Lesson 3: partial update
+  res.body.id: eq 1
+}
+
+tests {
+  test("PATCH changes the requested field", function () {
+    const post = res.getBody();
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(post.title).to.eql("Lesson 3: partial update");
+  });
+  
+  test("PATCH response still contains the resource shape", function () {
+    const post = res.getBody();
+  
+    expect(post.id).to.eql(1);
+    expect(post.userId).to.be.a("number");
+    expect(post.body).to.be.a("string").and.not.be.empty;
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

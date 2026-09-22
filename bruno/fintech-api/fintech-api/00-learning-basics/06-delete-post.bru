@@ -1,0 +1,36 @@
+meta {
+  name: 06-delete-post
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{resourceBaseUrl}}/posts/{{postId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains application/json
+}
+
+tests {
+  test("DELETE returns the documented success response", function () {
+    expect(res.getStatus()).to.eql(200);
+    expect(res.getHeader("content-type")).to.include("application/json");
+  });
+  
+  test("DELETE returns an empty JSON object", function () {
+    const body = res.getBody();
+  
+    expect(body).to.be.an("object");
+    expect(Object.keys(body)).to.have.lengthOf(0);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

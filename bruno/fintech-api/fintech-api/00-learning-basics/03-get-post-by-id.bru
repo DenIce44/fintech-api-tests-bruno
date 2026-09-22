@@ -1,0 +1,44 @@
+meta {
+  name: 03-get-post-by-id
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{resourceBaseUrl}}/posts/{{postId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  @description('существующий ресурс найден')
+  res.status: eq 200
+  @description('ответ имеет JSON-формат')
+  res.headers['content-type']: contains application/json
+  @description('сервер вернул нужный ресурс')
+  res.body.id: eq 1
+}
+
+tests {
+  test("existing post returns 200 and JSON", function () {
+    expect(res.getStatus()).to.eql(200);
+    expect(res.getHeader("content-type")).to.include("application/json");
+  });
+  
+  test("response contains the requested post", function () {
+    const post = res.getBody();
+  
+    expect(post).to.be.an("object");
+    expect(post.id).to.eql(1);
+    expect(post.id).to.be.a("number");
+    expect(post.userId).to.be.a("number");
+    expect(post.title).to.be.a("string").and.not.be.empty;
+    expect(post.body).to.be.a("string").and.not.be.empty;
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
