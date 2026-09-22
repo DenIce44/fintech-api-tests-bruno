@@ -1,0 +1,40 @@
+meta {
+  name: 07-get-missing-post
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{resourceBaseUrl}}/posts/{{missingPostId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  @description('существующий ресурс найден')
+  res.status: eq 404
+  @description('ответ имеет JSON-формат')
+  res.headers['content-type']: contains application/json
+  @description('сервер вернул нужный ресурс')
+  ~res.body.id: eq 1
+}
+
+tests {
+  test("missing post returns the expected 404", function () {
+    expect(res.getStatus()).to.eql(404);
+    expect(res.getHeader("content-type")).to.include("application/json");
+  });
+  
+  test("404 response does not expose unexpected data", function () {
+    const body = res.getBody();
+  
+    expect(body).to.be.an("object");
+    expect(Object.keys(body)).to.have.lengthOf(0);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

@@ -1,0 +1,62 @@
+meta {
+  name: 04-put-post
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{resourceBaseUrl}}/posts/{{postId}}
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "id": 1,
+    "userId": 1,
+    "title": "Lesson 3: complete replacement",
+    "body": "This representation contains every required post field."
+  }
+}
+
+assert {
+  @description('существующий ресурс найден')
+  res.status: eq 200
+  @description('ответ имеет JSON-формат')
+  res.headers['content-type']: contains application/json
+  @description('сервер вернул нужный ресурс')
+  res.body.title: eq Lesson 3: complete replacement
+}
+
+tests {
+  test("PUT returns the complete replacement", function () {
+    const post = res.getBody();
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(post).to.deep.include({
+      id: 1,
+      userId: 1,
+      title: "Lesson 3: complete replacement",
+      body: "This representation contains every required post field."
+    });
+  });
+  
+  test("PUT response keeps field types", function () {
+    const post = res.getBody();
+  
+    expect(post.id).to.be.a("number");
+    expect(post.userId).to.be.a("number");
+    expect(post.title).to.be.a("string");
+    expect(post.body).to.be.a("string");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
