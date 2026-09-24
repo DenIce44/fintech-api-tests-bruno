@@ -1,0 +1,81 @@
+meta {
+  name: 10-create-transfer-reference
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/post
+  body: json
+  auth: inherit
+}
+
+headers {
+  @description('формат тела запроса')
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "operation": "create-transfer-reference",
+    "transferRef": "{{transferRef}}",
+    "amountMinor": 1250,
+    "currency": "USD"
+  }
+}
+
+vars:pre-request {
+  @description('Постоянный префикс только для этого запроса')
+  referencePrefix: LESSON5
+}
+
+script:pre-request {
+  const prefix = bru.getRequestVar("referencePrefix");
+  const timePart = Date.now().toString(36).toUpperCase();
+  const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const transferRef = `${prefix}-${timePart}-${randomPart}`;
+  
+  bru.setVar("transferRef", transferRef);
+}
+
+script:post-response {
+  const body = res.getBody();
+  const returnedReference = body?.json?.transferRef;
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot save transfer reference: status ${res.getStatus()}`);
+  }
+  
+  if (!returnedReference) {
+    throw new Error("Cannot save transfer reference: response field json.transferRef is missing");
+  }
+  
+  bru.setVar("createdTransferRef", returnedReference);
+}
+
+tests {
+  test("echo returns the generated transfer reference", function () {
+    const body = res.getBody();
+    const generatedReference = bru.getVar("transferRef");
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(body.json).to.be.an("object");
+    expect(body.json.transferRef).to.eql(generatedReference);
+    expect(body.json.transferRef).to.match(/^LESSON5-[A-Z0-9]+-[A-Z0-9]+$/);
+  });
+  
+  test("echo returns the transfer draft data", function () {
+    const payload = res.getBody().json;
+  
+    expect(payload.operation).to.eql("create-transfer-reference");
+    expect(payload.amountMinor).to.eql(1250);
+    expect(payload.amountMinor).to.be.a("number");
+    expect(payload.currency).to.eql("USD");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
