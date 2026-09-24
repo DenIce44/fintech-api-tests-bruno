@@ -398,9 +398,9 @@ Runtime variables — временное состояние. Это полезн
 Из корня коллекции выполните:
 
 ```bash
-cd bruno/fintech-api
+cd bruno/fintech-api/fintech-api
 npx bru run 00-learning-basics --env local
-cd ../..
+cd ../../..
 ```
 
 Проверьте:
@@ -476,7 +476,7 @@ git diff --stat
 Создайте коммит в рабочей ветке:
 
 ```bash
-git add bruno/fintech-api/00-learning-basics notes/session-05.md
+git add bruno/fintech-api/fintech-api/00-learning-basics notes/session-05.md
 git commit -m "test: add runtime variable request chain"
 git status
 git log -1 --format=fuller
@@ -572,21 +572,22 @@ git push -u origin lesson/05-runtime-chaining
 fintech-api-tests-bruno/
 ├── bruno/
 │   └── fintech-api/
-│       ├── 00-learning-basics/
-│       │   ├── 01-echo-get.bru
-│       │   ├── 02-echo-post.bru
-│       │   ├── 03-get-post-by-id.bru
-│       │   ├── 04-put-post.bru
-│       │   ├── 05-patch-post.bru
-│       │   ├── 06-delete-post.bru
-│       │   ├── 07-get-missing-post.bru
-│       │   ├── 08-get-posts-by-user.bru
-│       │   ├── 09-get-empty-posts-filter.bru
-│       │   ├── 10-create-transfer-reference.bru
-│       │   └── 11-use-transfer-reference.bru
-│       ├── environments/
-│       │   └── local.bru
-│       └── bruno.json
+│       └── fintech-api/
+│           ├── 00-learning-basics/
+│           │   ├── 01-echo-get.bru
+│           │   ├── 02-echo-post.bru
+│           │   ├── 03-get-post-by-id.bru
+│           │   ├── 04-put-post.bru
+│           │   ├── 05-patch-post.bru
+│           │   ├── 06-delete-post.bru
+│           │   ├── 07-get-missing-post.bru
+│           │   ├── 08-get-posts-by-user.bru
+│           │   ├── 09-get-empty-posts-filter.bru
+│           │   ├── 10-create-transfer-reference.bru
+│           │   └── 11-use-transfer-reference.bru
+│           ├── environments/
+│           │   └── local.bru
+│           └── bruno.json
 ├── lessons/
 │   ├── block-01/
 │   └── block-02/
