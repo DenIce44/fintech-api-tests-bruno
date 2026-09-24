@@ -1,0 +1,38 @@
+meta {
+  name: 11-use-transfer-reference
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/get?reference={{createdTransferRef}}
+  body: none
+  auth: inherit
+}
+
+params:query {
+  reference: {{createdTransferRef}}
+}
+
+tests {
+  test("second request receives the saved reference", function () {
+    const body = res.getBody();
+    const savedReference = bru.getVar("createdTransferRef");
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(savedReference).to.be.a("string").and.not.be.empty;
+    expect(body.args.reference).to.eql(savedReference);
+  });
+  
+  test("saved reference keeps the lesson prefix", function () {
+    const reference = res.getBody().args.reference;
+  
+    expect(reference).to.match(/^LESSON5-/);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
