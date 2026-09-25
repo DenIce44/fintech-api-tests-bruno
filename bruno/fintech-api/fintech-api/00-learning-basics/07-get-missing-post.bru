@@ -2,6 +2,10 @@ meta {
   name: 07-get-missing-post
   type: http
   seq: 7
+  tags: [
+    regression
+    negative
+  ]
 }
 
 get {
@@ -15,8 +19,6 @@ assert {
   res.status: eq 404
   @description('ответ имеет JSON-формат')
   res.headers['content-type']: contains application/json
-  @description('сервер вернул нужный ресурс')
-  ~res.body.id: eq 1
 }
 
 tests {

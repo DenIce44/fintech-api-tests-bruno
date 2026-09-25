@@ -2,6 +2,10 @@ meta {
   name: 01-echo-get
   type: http
   seq: 1
+  tags: [
+    smoke
+    regression
+  ]
 }
 
 get {
@@ -23,6 +27,8 @@ assert {
   res.body.args.lesson: isDefined
   @description('поле имеет ожидаемый тип')
   res.body.args.lesson: isString
+  @description('ответ получен быстрее 10 секунд')
+  res.responseTime: lt  10000
 }
 
 tests {
