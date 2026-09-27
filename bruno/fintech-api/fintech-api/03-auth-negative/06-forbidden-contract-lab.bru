@@ -1,0 +1,44 @@
+meta {
+  name: 06-forbidden-contract-lab
+  type: http
+  seq: 6
+  tags: [
+    auth-contract-lab
+    negative
+  ]
+}
+
+get {
+  url: {{authBaseUrl}}/http/403/Forbidden_by_policy
+  body: none
+  auth: inherit
+}
+
+assert {
+  @description("'заглушка возвращает forbidden'")
+  res.status: eq 403
+  @description("'ответ имеет JSON-формат'")
+  res.headers['content-type']: contains contains application/json
+  @description("'статус продублирован в теле'")
+  res.body.status: eq 403
+  @description("'детали отказа присутствуют'")
+   res.body.detail: isString
+}
+
+tests {
+  test("403 stub exposes a minimal error contract", function () {
+    const body = res.getBody();
+  
+    expect(res.getStatus()).to.eql(403);
+    expect(body).to.be.an("object");
+    expect(body.status).to.eql(403);
+    expect(body.title).to.be.a("string").and.not.be.empty;
+    expect(body.detail).to.be.a("string").and.not.be.empty;
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

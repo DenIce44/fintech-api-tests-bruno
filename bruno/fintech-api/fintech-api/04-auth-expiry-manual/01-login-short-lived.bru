@@ -1,0 +1,60 @@
+meta {
+  name: 01-login-short-lived
+  type: http
+  seq: 1
+  tags: [
+    auth-expiry-manual
+  ]
+}
+
+post {
+  url: {{authBaseUrl}}/auth/login
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "username": "{{authUsername}}",
+    "password": "{{authPassword}}",
+    "expiresInMins": 1
+  }
+}
+
+script:pre-request {
+  [
+    "expiringAccessToken",
+    "expiringUserId",
+    "expiringUsername",
+    "expiringIssuedAtMs",
+    "expiryState"
+  ].forEach(function (name) {
+    bru.deleteVar(name);
+  });
+  
+  bru.setVar("expiryState", "issue-token");
+}
+
+script:post-response {
+  const body = res.getBody();
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Short-lived login failed with status ${res.getStatus()}`);
+  }
+  
+  if (typeof body.accessToken !== "string" || body.accessToken.length < 20) {
+    throw new Error("Short-lived access token is missing");
+  }
+  
+  bru.setVar("expiringAccessToken", body.accessToken);
+  bru.setVar("expiringUserId", body.id);
+  bru.setVar("expiringUsername", body.username);
+  bru.setVar("expiringIssuedAtMs", Date.now());
+  bru.setVar("expiryState", "verify-before-expiry");
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

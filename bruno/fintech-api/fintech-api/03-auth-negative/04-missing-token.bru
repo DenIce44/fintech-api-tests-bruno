@@ -1,0 +1,50 @@
+meta {
+  name: 04-missing-token
+  type: http
+  seq: 4
+  tags: [
+    regression
+    auth-negative
+  ]
+}
+
+get {
+  url: {{authBaseUrl}}/auth/me
+  body: none
+  auth: inherit
+}
+
+assert {
+  @description("'защищённый endpoint требует credential'")
+  res.status: eq 401
+  @description("'ошибка возвращена в JSON'")
+  res.headers['content-type']: contains application/json
+  @description("'сервер объясняет отказ'")
+  res.body.message: isString
+}
+
+tests {
+  test("request without a token is rejected as unauthenticated", function () {
+    const body = res.getBody();
+  
+    expect(res.getStatus()).to.eql(401);
+    expect(body).to.be.an("object");
+    expect(body.message).to.be.a("string").and.not.be.empty;
+    expect(body).to.not.have.property("id");
+    expect(body).to.not.have.property("username");
+  });
+  
+  test("401 response does not disclose credentials", function () {
+    const serializedBody = JSON.stringify(res.getBody());
+  
+    expect(serializedBody).to.not.include("accessToken");
+    expect(serializedBody).to.not.include("refreshToken");
+    expect(serializedBody).to.not.include("password");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
