@@ -1,0 +1,97 @@
+meta {
+  name: 02-get-user-posts
+  type: http
+  seq: 2
+  tags: [
+    chain
+    regression
+  ]
+}
+
+get {
+  url: {{resourceBaseUrl}}/posts?userId={{chainUserId}}
+  body: none
+  auth: inherit
+}
+
+params:query {
+  userId: {{chainUserId}}
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains application/json
+}
+
+script:pre-request {
+  const state = bru.getVar("chainState");
+  const userId = Number(bru.getVar("chainUserId"));
+  
+  if (state !== "load-posts") {
+    throw new Error(
+      `Invalid chain state: expected load-posts, got ${state || "missing"}. Run 01-find-user first.`
+    );
+  }
+  
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new Error("chainUserId is missing or invalid. Run 01-find-user first.");
+  }
+}
+
+script:post-response {
+  const posts = res.getBody();
+  const expectedUserId = Number(bru.getVar("chainUserId"));
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot continue chain: posts request returned ${res.getStatus()}`);
+  }
+  
+  if (!Array.isArray(posts) || posts.length === 0) {
+    throw new Error("Cannot continue chain: user has no posts");
+  }
+  
+  if (!posts.every(function (post) { return post.userId === expectedUserId; })) {
+    throw new Error("Cannot continue chain: response contains a post from another user");
+  }
+  
+  const selectedPost = posts[0];
+  
+  if (!Number.isInteger(selectedPost.id) || selectedPost.id <= 0) {
+    throw new Error("Cannot continue chain: selected post has no valid id");
+  }
+  
+  if (typeof selectedPost.title !== "string" || selectedPost.title.length === 0) {
+    throw new Error("Cannot continue chain: selected post has no title");
+  }
+  
+  bru.setVar("chainPostId", selectedPost.id);
+  bru.setVar("chainPostTitle", selectedPost.title);
+  bru.setVar("chainState", "load-comments");
+}
+
+tests {
+  test("all posts belong to the user selected in step 1", function () {
+    const posts = res.getBody();
+    const expectedUserId = Number(bru.getVar("chainUserId"));
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(posts).to.be.an("array").that.is.not.empty;
+    expect(posts.every(function (post) {
+      return post.userId === expectedUserId;
+    })).to.eql(true);
+  });
+  
+  test("first post data is saved for step 3", function () {
+    const firstPost = res.getBody()[0];
+  
+    expect(Number(bru.getVar("chainPostId"))).to.eql(firstPost.id);
+    expect(bru.getVar("chainPostTitle")).to.eql(firstPost.title);
+    expect(bru.getVar("chainState")).to.eql("load-comments");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

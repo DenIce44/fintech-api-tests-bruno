@@ -1,0 +1,100 @@
+meta {
+  name: 01-find-user
+  type: http
+  seq: 1
+  tags: [
+    regression
+    chain
+  ]
+}
+
+get {
+  url: {{resourceBaseUrl}}/users?username={{seedUsername}}
+  body: none
+  auth: inherit
+}
+
+params:query {
+  username: {{seedUsername}}
+}
+
+vars:pre-request {
+  seedUsername: Bret
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains application/json
+}
+
+script:pre-request {
+  const chainVariables = [
+    "chainUserId",
+    "chainUsername",
+    "chainPostId",
+    "chainPostTitle",
+    "chainCommentId",
+    "chainCommentPostId",
+    "chainCommentEmail",
+    "chainState"
+  ];
+  
+  chainVariables.forEach(function (name) {
+    bru.deleteVar(name);
+  });
+  
+  bru.setVar("chainState", "lookup-user");
+}
+
+script:post-response {
+  const users = res.getBody();
+  const expectedUsername = bru.getRequestVar("seedUsername");
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot continue chain: user lookup returned ${res.getStatus()}`);
+  }
+  
+  if (!Array.isArray(users) || users.length !== 1) {
+    throw new Error("Cannot continue chain: expected exactly one user");
+  }
+  
+  const selectedUser = users[0];
+  
+  if (!Number.isInteger(selectedUser.id) || selectedUser.id <= 0) {
+    throw new Error("Cannot continue chain: selected user has no valid id");
+  }
+  
+  if (selectedUser.username !== expectedUsername) {
+    throw new Error("Cannot continue chain: response username does not match the filter");
+  }
+  
+  bru.setVar("chainUserId", selectedUser.id);
+  bru.setVar("chainUsername", selectedUser.username);
+  bru.setVar("chainState", "load-posts");
+}
+
+tests {
+  test("user lookup returns exactly one matching user", function () {
+    const users = res.getBody();
+    const expectedUsername = bru.getRequestVar("seedUsername");
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(users).to.be.an("array").with.lengthOf(1);
+    expect(users[0].username).to.eql(expectedUsername);
+  });
+  
+  test("user id is saved for the next request", function () {
+    const users = res.getBody();
+    const savedUserId = Number(bru.getVar("chainUserId"));
+  
+    expect(savedUserId).to.eql(users[0].id);
+    expect(savedUserId).to.be.greaterThan(0);
+    expect(bru.getVar("chainState")).to.eql("load-posts");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
