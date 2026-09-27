@@ -1,0 +1,81 @@
+meta {
+  name: 02-get-current-user
+  type: http
+  seq: 2
+  tags: [
+    regression
+    auth-chain
+  ]
+}
+
+get {
+  url: {{authBaseUrl}}/auth/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains application/json
+}
+
+script:pre-request {
+  const state = bru.getVar("authState");
+  const accessToken = bru.getVar("authAccessToken");
+  
+  if (state !== "verify-session") {
+    throw new Error(
+      `Invalid auth state: expected verify-session, got ${state || "missing"}. Run 01-login first.`
+    );
+  }
+  
+  if (typeof accessToken !== "string" || accessToken.length < 20) {
+    throw new Error("authAccessToken is missing or invalid. Run 01-login first.");
+  }
+}
+
+script:post-response {
+  const user = res.getBody();
+  const expectedId = Number(bru.getVar("authUserId"));
+  const expectedUsername = bru.getVar("authUsernameFromApi");
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot continue auth chain: /auth/me returned ${res.getStatus()}`);
+  }
+  
+  if (!user || typeof user !== "object" || Array.isArray(user)) {
+    throw new Error("Cannot continue auth chain: /auth/me must return one user object");
+  }
+  
+  if (user.id !== expectedId || user.username !== expectedUsername) {
+    throw new Error("Cannot continue auth chain: token represents an unexpected user");
+  }
+  
+  bru.setVar("authState", "load-products");
+}
+
+tests {
+  test("access token identifies the user from login", function () {
+    const user = res.getBody();
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(user.id).to.eql(Number(bru.getVar("authUserId")));
+    expect(user.username).to.eql(bru.getVar("authUsernameFromApi"));
+    expect(user.email).to.be.a("string").and.include("@");
+  });
+  
+  test("auth chain is ready for the second protected request", function () {
+    expect(bru.getVar("authTokenVersion")).to.eql("login");
+    expect(bru.getVar("authState")).to.eql("load-products");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

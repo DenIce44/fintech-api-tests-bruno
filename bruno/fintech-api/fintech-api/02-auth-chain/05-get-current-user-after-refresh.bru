@@ -1,0 +1,76 @@
+meta {
+  name: 05-get-current-user-after-refresh
+  type: http
+  seq: 5
+  tags: [
+    auth-chain
+    regression
+  ]
+}
+
+get {
+  url: {{authBaseUrl}}/auth/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{authAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:pre-request {
+  const state = bru.getVar("authState");
+  const tokenVersion = bru.getVar("authTokenVersion");
+  const accessToken = bru.getVar("authAccessToken");
+  
+  if (state !== "verify-refreshed-session" || tokenVersion !== "refreshed") {
+    throw new Error(
+      "Refreshed session is not ready. Run the complete chain through 04-refresh-token."
+    );
+  }
+  
+  if (typeof accessToken !== "string" || accessToken.length < 20) {
+    throw new Error("Refreshed authAccessToken is missing or invalid.");
+  }
+}
+
+script:post-response {
+  const user = res.getBody();
+  const expectedId = Number(bru.getVar("authUserId"));
+  const expectedUsername = bru.getVar("authUsernameFromApi");
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot complete auth chain: refreshed token returned ${res.getStatus()}`);
+  }
+  
+  if (user.id !== expectedId || user.username !== expectedUsername) {
+    throw new Error("Cannot complete auth chain: user changed after token refresh");
+  }
+  
+  bru.setVar("authState", "complete");
+}
+
+tests {
+  test("refreshed access token is accepted", function () {
+    expect(res.getStatus()).to.eql(200);
+    expect(bru.getVar("authTokenVersion")).to.eql("refreshed");
+  });
+  
+  test("refresh preserves the authenticated identity", function () {
+    const user = res.getBody();
+  
+    expect(user.id).to.eql(Number(bru.getVar("authUserId")));
+    expect(user.username).to.eql(bru.getVar("authUsernameFromApi"));
+    expect(bru.getVar("authState")).to.eql("complete");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

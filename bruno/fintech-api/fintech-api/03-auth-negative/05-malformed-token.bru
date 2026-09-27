@@ -1,0 +1,45 @@
+meta {
+  name: 05-malformed-token
+  type: http
+  seq: 5
+  tags: [
+    auth-negative
+    regression
+  ]
+}
+
+get {
+  url: {{authBaseUrl}}/auth/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: not-a-valid-jwt
+}
+
+tests {
+  test("malformed bearer token is rejected", function () {
+    const body = res.getBody();
+  
+    expect(res.getStatus()).to.eql(401);
+    expect(res.getHeader("content-type")).to.include("application/json");
+    expect(body).to.be.an("object");
+    expect(body.message).to.be.a("string").and.not.be.empty;
+  });
+  
+  test("malformed-token response contains no session data", function () {
+    const body = res.getBody();
+  
+    expect(body).to.not.have.property("id");
+    expect(body).to.not.have.property("username");
+    expect(body).to.not.have.property("accessToken");
+    expect(body).to.not.have.property("refreshToken");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

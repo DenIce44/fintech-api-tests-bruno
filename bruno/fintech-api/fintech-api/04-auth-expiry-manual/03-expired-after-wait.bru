@@ -1,0 +1,76 @@
+meta {
+  name: 03-expired-after-wait
+  type: http
+  seq: 3
+  tags: [
+    auth-expiry-manual
+  ]
+}
+
+get {
+  url: {{authBaseUrl}}/auth/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{expiringAccessToken}}
+}
+
+assert {
+  @description('истёкший token отклонён')
+  res.status: eq 401
+  @description('ошибка возвращена в JSON')
+  res.headers['content-type']: contains application/json
+  @description('сообщение ошибки присутствует')
+  es.body.message: isString
+}
+
+script:pre-request {
+  const state = bru.getVar("expiryState");
+  const token = bru.getVar("expiringAccessToken");
+  const issuedAtMs = Number(bru.getVar("expiringIssuedAtMs"));
+  const ageSeconds = (Date.now() - issuedAtMs) / 1000;
+  
+  if (state !== "wait-for-expiry") {
+    throw new Error("Run steps 01 and 02 first");
+  }
+  
+  if (typeof token !== "string" || token.length < 20) {
+    throw new Error("expiringAccessToken is missing");
+  }
+  
+  if (!Number.isFinite(ageSeconds) || ageSeconds < 65) {
+    const remaining = Math.ceil(65 - ageSeconds);
+    throw new Error(`Token is not old enough for this check. Wait about ${remaining} more seconds.`);
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 401) {
+    bru.setVar("expiryState", "complete");
+  }
+}
+
+tests {
+  test("the same token is rejected after expiry", function () {
+    const body = res.getBody();
+  
+    expect(res.getStatus()).to.eql(401);
+    expect(body).to.be.an("object");
+    expect(body.message).to.be.a("string").and.not.be.empty;
+    expect(body).to.not.have.property("id");
+    expect(body).to.not.have.property("username");
+  });
+  
+  test("expiry check reused the original runtime token", function () {
+    expect(bru.getVar("expiryState")).to.eql("wait-for-expiry");
+    expect(Number(bru.getVar("expiringIssuedAtMs"))).to.be.greaterThan(0);
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

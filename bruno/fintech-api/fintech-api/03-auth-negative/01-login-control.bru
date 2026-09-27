@@ -1,0 +1,99 @@
+meta {
+  name: 01-login-control
+  type: http
+  seq: 1
+  tags: [
+    regression
+    auth-negative
+  ]
+}
+
+post {
+  url: {{authBaseUrl}}/auth/login
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "username": "{{authUsername}}",
+    "password": "{{authPassword}}",
+    "expiresInMins": 30
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains   application/json
+  res.body.accessToken: isString
+  res.body.id: isNumber
+}
+
+script:pre-request {
+  [
+    "negativeAccessToken",
+    "negativeUserId",
+    "negativeUsername",
+    "negativeAuthState"
+  ].forEach(function (name) {
+    bru.deleteVar(name);
+  });
+  
+  bru.setVar("negativeAuthState", "login-control");
+}
+
+script:post-response {
+  const body = res.getBody();
+  const expectedUsername = bru.getEnvVar("authUsername");
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Control login failed with status ${res.getStatus()}`);
+  }
+  
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("Control login must return an object");
+  }
+  
+  if (
+    typeof body.accessToken !== "string" ||
+    body.accessToken.length < 20 ||
+    body.accessToken.split(".").length !== 3
+  ) {
+    throw new Error("Control login did not return a JWT-like access token");
+  }
+  
+  if (!Number.isInteger(body.id) || body.id <= 0) {
+    throw new Error("Control login did not return a valid user id");
+  }
+  
+  if (body.username !== expectedUsername) {
+    throw new Error("Control login returned an unexpected user");
+  }
+  
+  bru.setVar("negativeAccessToken", body.accessToken);
+  bru.setVar("negativeUserId", body.id);
+  bru.setVar("negativeUsername", body.username);
+  bru.setVar("negativeAuthState", "verify-valid-token");
+}
+
+tests {
+  test("control login returns the requested user", function () {
+    const body = res.getBody();
+  
+    expect(body.username).to.eql(bru.getEnvVar("authUsername"));
+    expect(body.id).to.be.a("number").and.greaterThan(0);
+  });
+  
+  test("control token is saved without logging it", function () {
+    const body = res.getBody();
+  
+    expect(bru.getVar("negativeAccessToken")).to.eql(body.accessToken);
+    expect(bru.getVar("negativeAuthState")).to.eql("verify-valid-token");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

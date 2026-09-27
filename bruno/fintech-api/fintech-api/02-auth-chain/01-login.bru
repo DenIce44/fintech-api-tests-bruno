@@ -1,0 +1,119 @@
+meta {
+  name: 01-login
+  type: http
+  seq: 1
+  tags: [
+    regression
+    auth-chain
+  ]
+}
+
+post {
+  url: {{authBaseUrl}}/auth/login
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "username": "{{authUsername}}",
+    "password": "{{authPassword}}",
+    "expiresInMins": 30
+  }
+}
+
+assert {
+  @description('логин выполнен успешно')
+  res.status: eq 200
+  @description('ответ имеет формат JSON')
+  res.headers['content-type']: contains application/json
+  res.body.id: isNumber
+  res.body.accessToken: isString
+  res.body.refreshToken: isString
+}
+
+script:pre-request {
+  const authVariables = [
+    "authAccessToken",
+    "authRefreshToken",
+    "authUserId",
+    "authUsernameFromApi",
+    "authTokenVersion",
+    "authState"
+  ];
+  
+  authVariables.forEach(function (name) {
+    bru.deleteVar(name);
+  });
+  
+  bru.setVar("authState", "login");
+}
+
+script:post-response {
+  const body = res.getBody();
+  const expectedUsername = bru.getEnvVar("authUsername");
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot start auth chain: login returned ${res.getStatus()}`);
+  }
+  
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("Cannot start auth chain: login response must be an object");
+  }
+  
+  if (
+    typeof body.accessToken !== "string" ||
+    body.accessToken.length < 20 ||
+    body.accessToken.split(".").length !== 3
+  ) {
+    throw new Error("Cannot start auth chain: accessToken is missing or malformed");
+  }
+  
+  if (
+    typeof body.refreshToken !== "string" ||
+    body.refreshToken.length < 20 ||
+    body.refreshToken.split(".").length !== 3
+  ) {
+    throw new Error("Cannot start auth chain: refreshToken is missing or malformed");
+  }
+  
+  if (!Number.isInteger(body.id) || body.id <= 0) {
+    throw new Error("Cannot start auth chain: user id is missing or invalid");
+  }
+  
+  if (body.username !== expectedUsername) {
+    throw new Error("Cannot start auth chain: response user differs from login input");
+  }
+  
+  bru.setVar("authAccessToken", body.accessToken);
+  bru.setVar("authRefreshToken", body.refreshToken);
+  bru.setVar("authUserId", body.id);
+  bru.setVar("authUsernameFromApi", body.username);
+  bru.setVar("authTokenVersion", "login");
+  bru.setVar("authState", "verify-session");
+}
+
+tests {
+  test("login returns the requested user", function () {
+    const body = res.getBody();
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(body.username).to.eql(bru.getEnvVar("authUsername"));
+    expect(body.id).to.be.a("number").and.greaterThan(0);
+  });
+  
+  test("tokens are saved for subsequent requests", function () {
+    const body = res.getBody();
+  
+    expect(bru.getVar("authAccessToken")).to.eql(body.accessToken);
+    expect(bru.getVar("authRefreshToken")).to.eql(body.refreshToken);
+    expect(bru.getVar("authTokenVersion")).to.eql("login");
+    expect(bru.getVar("authState")).to.eql("verify-session");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

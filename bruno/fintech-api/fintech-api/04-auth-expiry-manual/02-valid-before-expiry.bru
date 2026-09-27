@@ -1,0 +1,54 @@
+meta {
+  name: 02-valid-before-expiry
+  type: http
+  seq: 2
+  tags: [
+    auth-expiry-manual
+  ]
+}
+
+get {
+  url: {{authBaseUrl}}/auth/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{expiringAccessToken}}
+}
+
+script:pre-request {
+  const state = bru.getVar("expiryState");
+  const issuedAtMs = Number(bru.getVar("expiringIssuedAtMs"));
+  const ageSeconds = (Date.now() - issuedAtMs) / 1000;
+  
+  if (state !== "verify-before-expiry") {
+    throw new Error("Run 01-login-short-lived first");
+  }
+  
+  if (!Number.isFinite(ageSeconds) || ageSeconds >= 50) {
+    throw new Error("The token may already be near expiry. Restart from step 01.");
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("expiryState", "wait-for-expiry");
+  }
+}
+
+tests {
+  test("short-lived token works before expiry", function () {
+    const user = res.getBody();
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(user.id).to.eql(Number(bru.getVar("expiringUserId")));
+    expect(user.username).to.eql(bru.getVar("expiringUsername"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

@@ -1,0 +1,57 @@
+meta {
+  name: 02-valid-token-control
+  type: http
+  seq: 2
+  tags: [
+    auth-negative
+    regression
+  ]
+}
+
+get {
+  url: {{authBaseUrl}}/auth/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{negativeAccessToken}}
+}
+
+script:pre-request {
+  const state = bru.getVar("negativeAuthState");
+  const token = bru.getVar("negativeAccessToken");
+  
+  if (state !== "verify-valid-token") {
+    throw new Error(
+      `Invalid control state: expected verify-valid-token, got ${state || "missing"}. Run 01-login-control first.`
+    );
+  }
+  
+  if (typeof token !== "string" || token.length < 20) {
+    throw new Error("negativeAccessToken is missing. Run 01-login-control first.");
+  }
+}
+
+script:post-response {
+  if (res.getStatus() === 200) {
+    bru.setVar("negativeAuthState", "control-complete");
+  }
+}
+
+tests {
+  test("fresh access token is accepted", function () {
+    const user = res.getBody();
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(res.getHeader("content-type")).to.include("application/json");
+    expect(user.id).to.eql(Number(bru.getVar("negativeUserId")));
+    expect(user.username).to.eql(bru.getVar("negativeUsername"));
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
