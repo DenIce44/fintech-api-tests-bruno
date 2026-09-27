@@ -1,0 +1,89 @@
+meta {
+  name: 03-get-protected-products
+  type: http
+  seq: 3
+  tags: [
+    regression
+    auth-chain
+  ]
+}
+
+get {
+  url: {{authBaseUrl}}/auth/products?limit=3
+  body: none
+  auth: bearer
+}
+
+params:query {
+  limit: 3
+}
+
+auth:bearer {
+  token: {{authAccessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains application/json
+}
+
+script:pre-request {
+  const state = bru.getVar("authState");
+  const accessToken = bru.getVar("authAccessToken");
+  
+  if (state !== "load-products") {
+    throw new Error(
+      `Invalid auth state: expected load-products, got ${state || "missing"}. Run steps 01 and 02 first.`
+    );
+  }
+  
+  if (typeof accessToken !== "string" || accessToken.length < 20) {
+    throw new Error("authAccessToken is missing or invalid. Restart the chain from 01-login.");
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot continue auth chain: /auth/products returned ${res.getStatus()}`);
+  }
+  
+  if (!body || !Array.isArray(body.products)) {
+    throw new Error("Cannot continue auth chain: products array is missing");
+  }
+  
+  if (body.products.length !== 3 || body.limit !== 3) {
+    throw new Error("Cannot continue auth chain: protected product limit was not applied");
+  }
+  
+  if (!body.products.every(function (product) {
+    return Number.isInteger(product.id) && product.id > 0 && typeof product.title === "string";
+  })) {
+    throw new Error("Cannot continue auth chain: a product has an invalid contract");
+  }
+  
+  bru.setVar("authState", "refresh-token");
+}
+
+tests {
+  test("the same login token opens a second protected resource", function () {
+    const body = res.getBody();
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(body.products).to.be.an("array").with.lengthOf(3);
+    expect(body.limit).to.eql(3);
+    expect(body.total).to.be.a("number").and.greaterThan(3);
+  });
+  
+  test("original access token has not been refreshed yet", function () {
+    expect(bru.getVar("authTokenVersion")).to.eql("login");
+    expect(bru.getVar("authState")).to.eql("refresh-token");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

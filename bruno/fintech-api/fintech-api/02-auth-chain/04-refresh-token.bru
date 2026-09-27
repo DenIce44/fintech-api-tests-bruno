@@ -1,0 +1,96 @@
+meta {
+  name: 04-refresh-token
+  type: http
+  seq: 4
+  tags: [
+    auth-chain
+    regression
+  ]
+}
+
+post {
+  url: {{authBaseUrl}}/auth/refresh
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "refreshToken": "{{authRefreshToken}}",
+    "expiresInMins": 30
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+script:pre-request {
+  const state = bru.getVar("authState");
+  const refreshToken = bru.getVar("authRefreshToken");
+  
+  if (state !== "refresh-token") {
+    throw new Error(
+      `Invalid auth state: expected refresh-token, got ${state || "missing"}. Run steps 01–03 first.`
+    );
+  }
+  
+  if (typeof refreshToken !== "string" || refreshToken.length < 20) {
+    throw new Error("authRefreshToken is missing or invalid. Restart the chain from 01-login.");
+  }
+}
+
+script:post-response {
+  const body = res.getBody();
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot refresh auth session: endpoint returned ${res.getStatus()}`);
+  }
+  
+  if (
+    !body ||
+    typeof body.accessToken !== "string" ||
+    body.accessToken.length < 20 ||
+    body.accessToken.split(".").length !== 3
+  ) {
+    throw new Error("Cannot refresh auth session: new accessToken is missing or malformed");
+  }
+  
+  if (
+    typeof body.refreshToken !== "string" ||
+    body.refreshToken.length < 20 ||
+    body.refreshToken.split(".").length !== 3
+  ) {
+    throw new Error("Cannot refresh auth session: new refreshToken is missing or malformed");
+  }
+  
+  bru.setVar("authAccessToken", body.accessToken);
+  bru.setVar("authRefreshToken", body.refreshToken);
+  bru.setVar("authTokenVersion", "refreshed");
+  bru.setVar("authState", "verify-refreshed-session");
+}
+
+tests {
+  test("refresh returns a complete token pair", function () {
+    const body = res.getBody();
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(body.accessToken).to.be.a("string").and.not.empty;
+    expect(body.refreshToken).to.be.a("string").and.not.empty;
+  });
+  
+  test("runtime variables now contain the refreshed pair", function () {
+    const body = res.getBody();
+  
+    expect(bru.getVar("authAccessToken")).to.eql(body.accessToken);
+    expect(bru.getVar("authRefreshToken")).to.eql(body.refreshToken);
+    expect(bru.getVar("authTokenVersion")).to.eql("refreshed");
+    expect(bru.getVar("authState")).to.eql("verify-refreshed-session");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
