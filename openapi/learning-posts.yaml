@@ -1,0 +1,99 @@
+openapi: 3.0.3
+
+info:
+  title: Learning Posts API
+  version: 1.0.0
+  description: Минимальный учебный контракт для практики импорта в Bruno.
+
+servers:
+  - url: https://jsonplaceholder.typicode.com
+    description: Public learning server
+
+tags:
+  - name: Posts
+    description: Чтение учебных публикаций
+
+paths:
+  /posts/{postId}:
+    get:
+      tags:
+        - Posts
+      operationId: getPostById
+      summary: Получить публикацию по идентификатору
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          description: Идентификатор существующей публикации
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      responses:
+        "200":
+          description: Публикация найдена
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+              example:
+                userId: 1
+                id: 1
+                title: Example title
+                body: Example body
+        "404":
+          description: Публикация не найдена
+          content:
+            application/json:
+              schema:
+                type: object
+                maxProperties: 0
+              example: {}
+
+  /posts:
+    get:
+      tags:
+        - Posts
+      operationId: getPosts
+      summary: Получить список публикаций с фильтром по пользователю
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          description: Необязательный фильтр по идентификатору пользователя
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      responses:
+        "200":
+          description: Список публикаций, возможно пустой
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+
+components:
+  schemas:
+    Post:
+      type: object
+      required:
+        - userId
+        - id
+        - title
+        - body
+      properties:
+        userId:
+          type: integer
+          minimum: 1
+        id:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+        body:
+          type: string
+          minLength: 1

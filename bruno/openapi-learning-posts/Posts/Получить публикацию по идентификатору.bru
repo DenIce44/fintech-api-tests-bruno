@@ -1,0 +1,107 @@
+meta {
+  name: Получить публикацию по идентификатору
+  type: http
+  seq: 1
+  tags: [
+    Posts
+  ]
+}
+
+get {
+  url: {{baseUrl}}/posts/:postId
+  body: none
+  auth: inherit
+}
+
+params:path {
+  @description('Идентификатор существующей публикации')
+  postId: 1
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains application/json
+  res.body.id: eq 1
+}
+
+tests {
+  test("imported request returns the documented Post shape", function () {
+    const post = res.getBody();
+  
+    expect(post).to.be.an("object");
+    expect(post).to.have.all.keys("userId", "id", "title", "body");
+    expect(post.userId).to.be.a("number");
+    expect(post.id).to.be.a("number");
+    expect(post.title).to.be.a("string").and.not.be.empty;
+    expect(post.body).to.be.a("string").and.not.be.empty;
+  });
+}
+
+example {
+  name: 200 Response
+  description: Публикация найдена
+  
+  request: {
+    url: {{baseUrl}}/posts/:postId
+    method: GET
+    mode: none
+    params:path: {
+      postId: 1
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {
+          "userId": 1,
+          "id": 1,
+          "title": "Example title",
+          "body": "Example body"
+        }
+      '''
+    }
+  }
+}
+
+example {
+  name: 404 Response
+  description: Публикация не найдена
+  
+  request: {
+    url: {{baseUrl}}/posts/:postId
+    method: GET
+    mode: none
+    params:path: {
+      postId: 1
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 404
+      text: Not Found
+    }
+  
+    body: {
+      type: json
+      content: '''
+        {}
+      '''
+    }
+  }
+}

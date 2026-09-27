@@ -1,0 +1,58 @@
+meta {
+  name: Получить список публикаций с фильтром по пользователю
+  type: http
+  seq: 2
+  tags: [
+    Posts
+  ]
+}
+
+get {
+  url: {{baseUrl}}/posts
+  body: none
+  auth: inherit
+}
+
+params:query {
+  @description('Необязательный фильтр по идентификатору пользователя')
+  userId: 1
+}
+
+example {
+  name: 200 Response
+  description: Список публикаций, возможно пустой
+  
+  request: {
+    url: {{baseUrl}}/posts
+    method: GET
+    mode: none
+    params:query: {
+      userId: 1
+    }
+  }
+  
+  response: {
+    headers: {
+      Content-Type: application/json
+    }
+  
+    status: {
+      code: 200
+      text: OK
+    }
+  
+    body: {
+      type: json
+      content: '''
+        [
+          {
+            "userId": 0,
+            "id": 0,
+            "title": "",
+            "body": ""
+          }
+        ]
+      '''
+    }
+  }
+}
