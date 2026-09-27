@@ -1,0 +1,95 @@
+meta {
+  name: 03-get-post-comments
+  type: http
+  seq: 3
+  tags: [
+    chain
+    regression
+  ]
+}
+
+get {
+  url: {{resourceBaseUrl}}/posts/{{chainPostId}}/comments
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains application/json
+}
+
+script:pre-request {
+  const state = bru.getVar("chainState");
+  const postId = Number(bru.getVar("chainPostId"));
+  
+  if (state !== "load-comments") {
+    throw new Error(
+      `Invalid chain state: expected load-comments, got ${state || "missing"}. Run steps 01 and 02 first.`
+    );
+  }
+  
+  if (!Number.isInteger(postId) || postId <= 0) {
+    throw new Error("chainPostId is missing or invalid. Run 02-get-user-posts first.");
+  }
+}
+
+script:post-response {
+  const comments = res.getBody();
+  const expectedPostId = Number(bru.getVar("chainPostId"));
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot continue chain: comments request returned ${res.getStatus()}`);
+  }
+  
+  if (!Array.isArray(comments) || comments.length === 0) {
+    throw new Error("Cannot continue chain: selected post has no comments");
+  }
+  
+  if (!comments.every(function (comment) { return comment.postId === expectedPostId; })) {
+    throw new Error("Cannot continue chain: response contains a comment from another post");
+  }
+  
+  const selectedComment = comments[0];
+  
+  if (!Number.isInteger(selectedComment.id) || selectedComment.id <= 0) {
+    throw new Error("Cannot continue chain: selected comment has no valid id");
+  }
+  
+  if (typeof selectedComment.email !== "string" || !selectedComment.email.includes("@")) {
+    throw new Error("Cannot continue chain: selected comment has no valid email");
+  }
+  
+  bru.setVar("chainCommentId", selectedComment.id);
+  bru.setVar("chainCommentPostId", selectedComment.postId);
+  bru.setVar("chainCommentEmail", selectedComment.email);
+  bru.setVar("chainState", "load-comment");
+}
+
+tests {
+  test("all comments belong to the post selected in step 2", function () {
+    const comments = res.getBody();
+    const expectedPostId = Number(bru.getVar("chainPostId"));
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(comments).to.be.an("array").that.is.not.empty;
+    expect(comments.every(function (comment) {
+      return comment.postId === expectedPostId;
+    })).to.eql(true);
+  });
+  
+  test("first comment data is saved for step 4", function () {
+    const firstComment = res.getBody()[0];
+  
+    expect(Number(bru.getVar("chainCommentId"))).to.eql(firstComment.id);
+    expect(Number(bru.getVar("chainCommentPostId"))).to.eql(firstComment.postId);
+    expect(bru.getVar("chainCommentEmail")).to.eql(firstComment.email);
+    expect(bru.getVar("chainState")).to.eql("load-comment");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}

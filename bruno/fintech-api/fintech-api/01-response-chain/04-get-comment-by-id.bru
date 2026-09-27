@@ -1,0 +1,93 @@
+meta {
+  name: 04-get-comment-by-id
+  type: http
+  seq: 4
+  tags: [
+    chain
+    regression
+  ]
+}
+
+get {
+  url: {{resourceBaseUrl}}/comments/{{chainCommentId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains application/json
+}
+
+script:pre-request {
+  const state = bru.getVar("chainState");
+  const commentId = Number(bru.getVar("chainCommentId"));
+  const postId = Number(bru.getVar("chainCommentPostId"));
+  const email = bru.getVar("chainCommentEmail");
+  
+  if (state !== "load-comment") {
+    throw new Error(
+      `Invalid chain state: expected load-comment, got ${state || "missing"}. Run steps 01–03 first.`
+    );
+  }
+  
+  if (!Number.isInteger(commentId) || commentId <= 0) {
+    throw new Error("chainCommentId is missing or invalid. Run 03-get-post-comments first.");
+  }
+  
+  if (!Number.isInteger(postId) || postId <= 0 || !email) {
+    throw new Error("Saved comment context is incomplete. Restart the chain from step 01.");
+  }
+}
+
+script:post-response {
+  const comment = res.getBody();
+  const expectedCommentId = Number(bru.getVar("chainCommentId"));
+  const expectedPostId = Number(bru.getVar("chainCommentPostId"));
+  const expectedEmail = bru.getVar("chainCommentEmail");
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot complete chain: comment request returned ${res.getStatus()}`);
+  }
+  
+  if (!comment || typeof comment !== "object" || Array.isArray(comment)) {
+    throw new Error("Cannot complete chain: expected one comment object");
+  }
+  
+  if (
+    comment.id !== expectedCommentId ||
+    comment.postId !== expectedPostId ||
+    comment.email !== expectedEmail
+  ) {
+    throw new Error("Cannot complete chain: comment differs from the object selected in step 3");
+  }
+  
+  bru.setVar("chainState", "complete");
+}
+
+tests {
+  test("comment is the object selected in step 3", function () {
+    const comment = res.getBody();
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(comment.id).to.eql(Number(bru.getVar("chainCommentId")));
+    expect(comment.postId).to.eql(Number(bru.getVar("chainCommentPostId")));
+    expect(comment.email).to.eql(bru.getVar("chainCommentEmail"));
+  });
+  
+  test("comment remains connected to the post selected in step 2", function () {
+    const comment = res.getBody();
+    const selectedPostId = Number(bru.getVar("chainPostId"));
+  
+    expect(comment.postId).to.eql(selectedPostId);
+    expect(comment.name).to.be.a("string").and.not.be.empty;
+    expect(comment.body).to.be.a("string").and.not.be.empty;
+    expect(bru.getVar("chainState")).to.eql("complete");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
