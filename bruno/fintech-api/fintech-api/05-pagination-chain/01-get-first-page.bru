@@ -1,0 +1,103 @@
+meta {
+  name: 01-get-first-page
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{resourceBaseUrl}}/posts?_page=1&_limit=5
+  body: none
+  auth: inherit
+}
+
+params:query {
+  _page: 1
+  _limit: 5
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains application/json
+}
+
+script:pre-request {
+  [
+    "paginationPageSize",
+    "paginationFirstPageIds",
+    "paginationState"
+  ].forEach(function (name) {
+    bru.deleteVar(name);
+  });
+  
+  bru.setVar("paginationPageSize", 5);
+  bru.setVar("paginationState", "load-first-page");
+}
+
+script:post-response {
+  const posts = res.getBody();
+  const expectedSize = Number(bru.getVar("paginationPageSize"));
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot continue pagination: first page returned ${res.getStatus()}`);
+  }
+  
+  if (!Array.isArray(posts) || posts.length !== expectedSize) {
+    throw new Error(
+      `Cannot continue pagination: expected ${expectedSize} items on page 1`
+    );
+  }
+  
+  const ids = posts.map(function (post) {
+    return post.id;
+  });
+  
+  if (!ids.every(function (id) { return Number.isInteger(id) && id > 0; })) {
+    throw new Error("Cannot continue pagination: page 1 contains an invalid id");
+  }
+  
+  if (new Set(ids).size !== ids.length) {
+    throw new Error("Cannot continue pagination: page 1 contains duplicate ids");
+  }
+  
+  bru.setVar("paginationFirstPageIds", JSON.stringify(ids));
+  bru.setVar("paginationState", "load-second-page");
+}
+
+tests {
+  test("first page respects the requested limit", function () {
+    const posts = res.getBody();
+    const expectedSize = Number(bru.getVar("paginationPageSize"));
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(posts).to.be.an("array").with.lengthOf(expectedSize);
+  });
+  
+  test("every first-page item has the posts contract", function () {
+    const posts = res.getBody();
+  
+    posts.forEach(function (post) {
+      expect(post).to.be.an("object");
+      expect(post).to.have.all.keys("userId", "id", "title", "body");
+      expect(post.userId).to.be.a("number");
+      expect(post.id).to.be.a("number");
+      expect(post.title).to.be.a("string").and.not.be.empty;
+      expect(post.body).to.be.a("string").and.not.be.empty;
+    });
+  });
+  
+  test("first-page ids are unique and saved for page 2", function () {
+    const posts = res.getBody();
+    const responseIds = posts.map(function (post) { return post.id; });
+    const savedIds = JSON.parse(bru.getVar("paginationFirstPageIds"));
+  
+    expect(new Set(responseIds).size).to.eql(responseIds.length);
+    expect(savedIds).to.eql(responseIds);
+    expect(bru.getVar("paginationState")).to.eql("load-second-page");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
