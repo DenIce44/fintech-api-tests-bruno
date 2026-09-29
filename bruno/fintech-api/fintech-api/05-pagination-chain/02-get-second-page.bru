@@ -1,0 +1,132 @@
+meta {
+  name: 02-get-second-page
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{resourceBaseUrl}}/posts?_page=2&_limit={{paginationPageSize}}
+  body: none
+  auth: inherit
+}
+
+params:query {
+  _page: 2
+  _limit: {{paginationPageSize}}
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: contains application/json
+}
+
+script:pre-request {
+  const state = bru.getVar("paginationState");
+  const pageSize = Number(bru.getVar("paginationPageSize"));
+  const savedIdsJson = bru.getVar("paginationFirstPageIds");
+  
+  if (state !== "load-second-page") {
+    throw new Error(
+      `Invalid pagination state: expected load-second-page, got ${state || "missing"}. Run 01-get-first-page first.`
+    );
+  }
+  
+  if (!Number.isInteger(pageSize) || pageSize <= 0) {
+    throw new Error("paginationPageSize is missing or invalid. Restart from page 1.");
+  }
+  
+  let firstPageIds;
+  
+  try {
+    firstPageIds = JSON.parse(savedIdsJson);
+  } catch (error) {
+    throw new Error("paginationFirstPageIds is not valid JSON. Restart from page 1.");
+  }
+  
+  if (!Array.isArray(firstPageIds) || firstPageIds.length !== pageSize) {
+    throw new Error("Saved page 1 context is incomplete. Restart from page 1.");
+  }
+}
+
+script:post-response {
+  const posts = res.getBody();
+  const expectedSize = Number(bru.getVar("paginationPageSize"));
+  const firstPageIds = JSON.parse(bru.getVar("paginationFirstPageIds"));
+  
+  if (res.getStatus() !== 200) {
+    throw new Error(`Cannot complete pagination: second page returned ${res.getStatus()}`);
+  }
+  
+  if (!Array.isArray(posts) || posts.length !== expectedSize) {
+    throw new Error(
+      `Cannot complete pagination: expected ${expectedSize} items on page 2`
+    );
+  }
+  
+  const secondPageIds = posts.map(function (post) {
+    return post.id;
+  });
+  
+  if (!secondPageIds.every(function (id) { return Number.isInteger(id) && id > 0; })) {
+    throw new Error("Cannot complete pagination: page 2 contains an invalid id");
+  }
+  
+  if (new Set(secondPageIds).size !== secondPageIds.length) {
+    throw new Error("Cannot complete pagination: page 2 contains duplicate ids");
+  }
+  
+  const firstPageSet = new Set(firstPageIds);
+  const overlap = secondPageIds.filter(function (id) {
+    return firstPageSet.has(id);
+  });
+  
+  if (overlap.length > 0) {
+    throw new Error(
+      `Cannot complete pagination: pages overlap on ${overlap.length} id(s)`
+    );
+  }
+  
+  bru.setVar("paginationState", "complete");
+}
+
+tests {
+  test("second page respects the same requested limit", function () {
+    const posts = res.getBody();
+    const expectedSize = Number(bru.getVar("paginationPageSize"));
+  
+    expect(res.getStatus()).to.eql(200);
+    expect(posts).to.be.an("array").with.lengthOf(expectedSize);
+  });
+  
+  test("every second-page item has the posts contract", function () {
+    const posts = res.getBody();
+  
+    posts.forEach(function (post) {
+      expect(post).to.be.an("object");
+      expect(post).to.have.all.keys("userId", "id", "title", "body");
+      expect(post.userId).to.be.a("number");
+      expect(post.id).to.be.a("number");
+      expect(post.title).to.be.a("string").and.not.be.empty;
+      expect(post.body).to.be.a("string").and.not.be.empty;
+    });
+  });
+  
+  test("page 2 has unique ids and does not overlap page 1", function () {
+    const firstPageIds = JSON.parse(bru.getVar("paginationFirstPageIds"));
+    const secondPageIds = res.getBody().map(function (post) { return post.id; });
+    const firstPageSet = new Set(firstPageIds);
+    const overlap = secondPageIds.filter(function (id) {
+      return firstPageSet.has(id);
+    });
+  
+    expect(new Set(secondPageIds).size).to.eql(secondPageIds.length);
+    expect(overlap).to.eql([]);
+    expect(bru.getVar("paginationState")).to.eql("complete");
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
