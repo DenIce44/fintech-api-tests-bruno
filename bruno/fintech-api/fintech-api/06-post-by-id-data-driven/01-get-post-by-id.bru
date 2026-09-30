@@ -1,0 +1,167 @@
+meta {
+  name: 01-get-post-by-id
+  type: http
+  seq: 1
+  tags: [
+    regression
+    data-driven
+    posts
+  ]
+}
+
+get {
+  url: {{resourceBaseUrl}}/posts/{{postId}}
+  body: none
+  auth: inherit
+}
+
+assert {
+  res.headers['content-type']: contains application/json
+}
+
+script:pre-request {
+  if (!bru.runner || !bru.runner.iterationData) {
+    throw new Error(
+      "Data file is required. Run this request through Collection Runner or CLI with post-id-cases.csv."
+    );
+  }
+  
+  const requiredColumns = [
+    "caseId",
+    "caseType",
+    "requirementId",
+    "postId",
+    "expectedStatus",
+    "expectedUserId",
+    "expectedBodyKind"
+  ];
+  
+  requiredColumns.forEach(function (column) {
+    if (!bru.runner.iterationData.has(column)) {
+      throw new Error(`Iteration data is missing required column: ${column}`);
+    }
+  
+    const value = bru.runner.iterationData.get(column);
+    if (value === undefined || value === null || String(value).trim() === "") {
+      throw new Error(`Iteration data has empty required value: ${column}`);
+    }
+  });
+  
+  const caseId = String(bru.runner.iterationData.get("caseId"));
+  const caseType = String(bru.runner.iterationData.get("caseType"));
+  const requirementId = String(
+    bru.runner.iterationData.get("requirementId")
+  );
+  const expectedUserId = String(
+    bru.runner.iterationData.get("expectedUserId")
+  );
+  const expectedStatus = Number(
+    bru.runner.iterationData.get("expectedStatus")
+  );
+  const expectedBodyKind = String(
+    bru.runner.iterationData.get("expectedBodyKind")
+  );
+  
+  if (!/^POST-ID-\d{3}$/.test(caseId)) {
+    throw new Error(`Invalid caseId format: ${caseId}`);
+  }
+  
+  if (!["happy", "boundary", "boundary-negative", "negative"].includes(caseType)) {
+    throw new Error(`Unsupported caseType for ${caseId}: ${caseType}`);
+  }
+  
+  if (requirementId !== "REQ-POST-GET-001") {
+    throw new Error(
+      `Unexpected requirementId for ${caseId}: ${requirementId}`
+    );
+  }
+  
+  if (![200, 404].includes(expectedStatus)) {
+    throw new Error(
+      `Unsupported expectedStatus for ${caseId}: ${expectedStatus}`
+    );
+  }
+  
+  if (!["resource", "error"].includes(expectedBodyKind)) {
+    throw new Error(
+      `Unsupported expectedBodyKind for ${caseId}: ${expectedBodyKind}`
+    );
+  }
+  
+  if (
+    (expectedStatus === 200 && expectedBodyKind !== "resource") ||
+    (expectedStatus === 404 && expectedBodyKind !== "error")
+  ) {
+    throw new Error(
+      `Inconsistent status/body oracle for ${caseId}`
+    );
+  }
+  
+  if (
+    expectedStatus === 200 &&
+    (!Number.isInteger(Number(expectedUserId)) || Number(expectedUserId) <= 0)
+  ) {
+    throw new Error(`Invalid expectedUserId for successful case ${caseId}`);
+  }
+  
+  if (expectedStatus === 404 && expectedUserId !== "none") {
+    throw new Error(`404 case ${caseId} must use expectedUserId=none`);
+  }
+}
+
+tests {
+  const data = bru.runner.iterationData;
+  const caseId = String(data.get("caseId"));
+  const requirementId = String(data.get("requirementId"));
+  const requestedPostId = String(data.get("postId"));
+  const expectedStatus = Number(data.get("expectedStatus"));
+  const expectedUserIdRaw = String(data.get("expectedUserId"));
+  const expectedBodyKind = String(data.get("expectedBodyKind"));
+  const body = res.getBody();
+  
+  test(`[${caseId}] is traceable to ${requirementId}`, function () {
+    expect(requirementId).to.eql("REQ-POST-GET-001");
+  });
+  
+  test(`[${caseId}] returns the exact expected status`, function () {
+    expect(res.getStatus()).to.eql(expectedStatus);
+  });
+  
+  test(`[${caseId}] returns JSON`, function () {
+    expect(res.getHeader("content-type")).to.include("application/json");
+  });
+  
+  if (expectedBodyKind === "resource") {
+    const expectedPostId = Number(requestedPostId);
+    const expectedUserId = Number(expectedUserIdRaw);
+  
+    test(`[${caseId}] returns the requested post`, function () {
+      expect(body).to.be.an("object").and.not.be.an("array");
+      expect(body).to.have.all.keys("userId", "id", "title", "body");
+      expect(body.id).to.eql(expectedPostId);
+      expect(body.userId).to.eql(expectedUserId);
+    });
+  
+    test(`[${caseId}] keeps the post field types`, function () {
+      expect(body.id).to.be.a("number");
+      expect(body.userId).to.be.a("number");
+      expect(body.title).to.be.a("string").and.not.be.empty;
+      expect(body.body).to.be.a("string").and.not.be.empty;
+    });
+  } else if (expectedBodyKind === "error") {
+    test(`[${caseId}] does not leak a post on 404`, function () {
+      expect(body).to.be.an("object").and.not.be.an("array");
+      expect(body).to.not.have.any.keys("userId", "id", "title", "body");
+    });
+  } else {
+    throw new Error(
+      `No response oracle implemented for body kind: ${expectedBodyKind}`
+    );
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+  forwardAuthorizationHeader: false
+}
