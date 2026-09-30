@@ -1,0 +1,825 @@
+openapi: 3.1.0
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+
+info:
+  title: Fintech Pilot API
+  version: 0.1.0
+  license:
+    name: ISC
+    identifier: ISC
+  description: >-
+    Учебный контракт цифрового кошелька. Все данные синтетические,
+    суммы передаются целым количеством minor units.
+
+servers:
+  - url: http://localhost:3000/v1
+    description: Local training environment
+
+tags:
+  - name: Auth
+    description: Получение учебной identity
+  - name: Customers
+    description: Клиенты и KYC-состояние
+  - name: Accounts
+    description: Счета и доступные остатки
+  - name: Transfers
+    description: Переводы между счетами в одной валюте
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      operationId: login
+      summary: Получить учебный access token
+      description: Аутентифицирует синтетического пользователя.
+      security: []
+      x-requirements:
+        - REQ-AUTH-001
+        - REQ-ERR-001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Identity подтверждена.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthToken"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /customers:
+    post:
+      tags:
+        - Customers
+      operationId: createCustomer
+      summary: Создать синтетического клиента
+      description: >-
+        Создаёт клиента с начальным KYC-статусом PENDING. Операция доступна
+        только разрешённой роли; externalRef должен быть уникальным.
+      x-requirements:
+        - REQ-AUTH-001
+        - REQ-ERR-001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "201":
+          description: Клиент создан с KYC-статусом PENDING.
+          headers:
+            Location:
+              description: URL созданного клиента.
+              schema:
+                type: string
+                format: uri-reference
+              example: /v1/customers/customer-synthetic-001
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /customers/{customerId}/kyc:
+    patch:
+      tags:
+        - Customers
+      operationId: updateCustomerKyc
+      summary: Изменить KYC-статус клиента
+      description: >-
+        Только роль compliance может установить VERIFIED или REJECTED.
+        Запрещённый переход состояния возвращает конфликт.
+      x-requirements:
+        - REQ-KYC-001
+        - REQ-ERR-001
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateKycRequest"
+      responses:
+        "200":
+          description: KYC-статус клиента изменён.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /accounts:
+    post:
+      tags:
+        - Accounts
+      operationId: createAccount
+      summary: Создать счёт клиента
+      description: >-
+        Создаёт активный счёт для существующего клиента с разрешённым
+        KYC-статусом. Валюта фиксируется при создании счёта.
+      x-requirements:
+        - REQ-AUTH-001
+        - REQ-ERR-001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+      responses:
+        "201":
+          description: Активный счёт создан.
+          headers:
+            Location:
+              description: URL созданного счёта.
+              schema:
+                type: string
+                format: uri-reference
+              example: /v1/accounts/acc-source-001
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /accounts/{accountId}:
+    get:
+      tags:
+        - Accounts
+      operationId: getAccount
+      summary: Получить собственный счёт
+      description: >-
+        Возвращает счёт его владельцу. Для отсутствующего и чужого
+        accountId используется одинаковый маскирующий ответ 404.
+      x-requirements:
+        - REQ-ACC-001
+        - REQ-ERR-001
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Метаданные собственного счёта.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /accounts/{accountId}/balance:
+    get:
+      tags:
+        - Accounts
+      operationId: getAccountBalance
+      summary: Получить доступный остаток собственного счёта
+      description: >-
+        Возвращает остаток в minor units. Для отсутствующего и чужого
+        accountId используется одинаковый маскирующий ответ 404.
+      x-requirements:
+        - REQ-ACC-001
+        - REQ-ERR-001
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Доступный остаток собственного счёта.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Balance"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /transfers:
+    post:
+      tags:
+        - Transfers
+      operationId: createTransfer
+      summary: Создать перевод между двумя счетами
+      description: >-
+        Создаёт перевод один раз при достаточном остатке, активных счетах,
+        совпадающей валюте и непревышенном дневном лимите 100000 minor
+        units включительно. Исходный и целевой счёт должны различаться.
+        При любом отказе оба баланса остаются неизменными.
+      x-requirements:
+        - REQ-ACC-002
+        - REQ-TRF-001
+        - REQ-TRF-002
+        - REQ-TRF-003
+        - REQ-TRF-004
+        - REQ-IDEM-001
+        - REQ-IDEM-002
+        - REQ-ERR-001
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransferRequest"
+      responses:
+        "201":
+          description: Новый перевод создан и выполнен один раз.
+          headers:
+            Location:
+              description: URL созданного перевода.
+              schema:
+                type: string
+                format: uri-reference
+              example: /v1/transfers/transfer-synthetic-001
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transfer"
+        "200":
+          description: >-
+            Идентичный запрос с тем же Idempotency-Key; возвращён исходный
+            Transfer, новый перевод и повторное движение денег не созданы.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transfer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Idempotency-Key уже использован с другим payload.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: IDEMPOTENCY_CONFLICT
+                message: Idempotency key was used with another request
+                correlationId: corr-synthetic-001
+        "422":
+          description: Перевод нарушает бизнес-правило.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                insufficientFunds:
+                  value:
+                    code: INSUFFICIENT_FUNDS
+                    message: Transfer cannot be completed
+                    correlationId: corr-synthetic-001
+                blockedAccount:
+                  value:
+                    code: ACCOUNT_BLOCKED
+                    message: Transfer cannot be completed
+                    correlationId: corr-synthetic-001
+                currencyMismatch:
+                  value:
+                    code: CURRENCY_MISMATCH
+                    message: Transfer cannot be completed
+                    correlationId: corr-synthetic-001
+                dailyLimitExceeded:
+                  value:
+                    code: DAILY_LIMIT_EXCEEDED
+                    message: Transfer cannot be completed
+                    correlationId: corr-synthetic-001
+
+  /transfers/{transferId}:
+    get:
+      tags:
+        - Transfers
+      operationId: getTransfer
+      summary: Получить собственный перевод
+      description: >-
+        Возвращает перевод, доступный текущему клиенту. Для отсутствующего
+        или недоступного transferId используется маскирующий ответ 404.
+      x-requirements:
+        - REQ-AUTH-001
+        - REQ-ERR-001
+      parameters:
+        - $ref: "#/components/parameters/TransferId"
+      responses:
+        "200":
+          description: Состояние перевода.
+          headers:
+            X-Correlation-ID:
+              $ref: "#/components/headers/CorrelationId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transfer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ResourceId:
+      type: string
+      description: Синтетический идентификатор ресурса.
+      minLength: 1
+      maxLength: 64
+      pattern: "^[a-z]+-[a-z0-9-]+$"
+      example: acc-source-001
+
+    CurrencyCode:
+      type: string
+      description: Трёхбуквенный код валюты в верхнем регистре.
+      pattern: "^[A-Z]{3}$"
+      example: EUR
+
+    PositiveMinorAmount:
+      type: integer
+      format: int64
+      description: Положительная сумма в минимальных единицах валюты.
+      minimum: 1
+      example: 1000
+
+    NonNegativeMinorAmount:
+      type: integer
+      format: int64
+      description: Неотрицательный остаток в минимальных единицах валюты.
+      minimum: 0
+      example: 9000
+
+    KycStatus:
+      type: string
+      enum:
+        - PENDING
+        - VERIFIED
+        - REJECTED
+      example: VERIFIED
+
+    AccountStatus:
+      type: string
+      enum:
+        - ACTIVE
+        - BLOCKED
+      example: ACTIVE
+
+    TransferStatus:
+      type: string
+      enum:
+        - PENDING
+        - COMPLETED
+        - REJECTED
+      example: COMPLETED
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: customer-demo
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          writeOnly: true
+
+    AuthToken:
+      type: object
+      additionalProperties: false
+      required:
+        - accessToken
+        - tokenType
+        - expiresIn
+      properties:
+        accessToken:
+          type: string
+          minLength: 1
+          readOnly: true
+          example: synthetic-access-token
+        tokenType:
+          type: string
+          enum:
+            - Bearer
+          example: Bearer
+        expiresIn:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Срок действия token в секундах.
+          example: 3600
+
+    CreateCustomerRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - externalRef
+        - displayName
+      properties:
+        externalRef:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[A-Za-z0-9._:-]+$"
+          example: customer-session14-001
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Synthetic Customer 001
+
+    Customer:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - externalRef
+        - displayName
+        - kycStatus
+        - createdAt
+      properties:
+        id:
+          allOf:
+            - $ref: "#/components/schemas/ResourceId"
+          readOnly: true
+          example: customer-synthetic-001
+        externalRef:
+          type: string
+          minLength: 1
+          maxLength: 64
+          example: customer-session14-001
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Synthetic Customer 001
+        kycStatus:
+          $ref: "#/components/schemas/KycStatus"
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2026-09-30T09:00:00Z"
+
+    UpdateKycRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: Новое решение compliance; PENDING не принимается.
+          enum:
+            - VERIFIED
+            - REJECTED
+          example: VERIFIED
+
+    CreateAccountRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - customerId
+        - currency
+      properties:
+        customerId:
+          $ref: "#/components/schemas/ResourceId"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+      example:
+        customerId: customer-synthetic-001
+        currency: EUR
+
+    Account:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - customerId
+        - currency
+        - status
+        - createdAt
+      properties:
+        id:
+          allOf:
+            - $ref: "#/components/schemas/ResourceId"
+          readOnly: true
+          example: acc-source-001
+        customerId:
+          $ref: "#/components/schemas/ResourceId"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        status:
+          $ref: "#/components/schemas/AccountStatus"
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2026-09-30T09:05:00Z"
+
+    Balance:
+      type: object
+      additionalProperties: false
+      required:
+        - accountId
+        - currency
+        - available
+      properties:
+        accountId:
+          $ref: "#/components/schemas/ResourceId"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        available:
+          $ref: "#/components/schemas/NonNegativeMinorAmount"
+      example:
+        accountId: acc-source-001
+        currency: EUR
+        available: 9000
+
+    CreateTransferRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Исходный и целевой счета должны различаться. Оба счёта и поле
+        currency должны использовать одну валюту.
+      required:
+        - sourceAccountId
+        - targetAccountId
+        - amount
+        - currency
+      properties:
+        sourceAccountId:
+          $ref: "#/components/schemas/ResourceId"
+        targetAccountId:
+          $ref: "#/components/schemas/ResourceId"
+        amount:
+          $ref: "#/components/schemas/PositiveMinorAmount"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+      example:
+        sourceAccountId: acc-source-001
+        targetAccountId: acc-target-001
+        amount: 1000
+        currency: EUR
+
+    Transfer:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - sourceAccountId
+        - targetAccountId
+        - amount
+        - currency
+        - status
+        - createdAt
+      properties:
+        id:
+          allOf:
+            - $ref: "#/components/schemas/ResourceId"
+          readOnly: true
+          example: transfer-synthetic-001
+        sourceAccountId:
+          $ref: "#/components/schemas/ResourceId"
+        targetAccountId:
+          $ref: "#/components/schemas/ResourceId"
+        amount:
+          $ref: "#/components/schemas/PositiveMinorAmount"
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        status:
+          $ref: "#/components/schemas/TransferStatus"
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          example: "2026-09-30T09:10:00Z"
+      example:
+        id: transfer-synthetic-001
+        sourceAccountId: acc-source-001
+        targetAccountId: acc-target-001
+        amount: 1000
+        currency: EUR
+        status: COMPLETED
+        createdAt: "2026-09-30T09:10:00Z"
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+        - correlationId
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[A-Z][A-Z0-9_]*$"
+          example: INSUFFICIENT_FUNDS
+        message:
+          type: string
+          minLength: 1
+          maxLength: 256
+          example: Transfer cannot be completed
+        correlationId:
+          type: string
+          minLength: 1
+          maxLength: 128
+          example: corr-synthetic-001
+
+  parameters:
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      description: Синтетический идентификатор клиента.
+      schema:
+        $ref: "#/components/schemas/ResourceId"
+
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      description: Синтетический идентификатор счёта.
+      schema:
+        $ref: "#/components/schemas/ResourceId"
+
+    TransferId:
+      name: transferId
+      in: path
+      required: true
+      description: Синтетический идентификатор перевода.
+      schema:
+        $ref: "#/components/schemas/ResourceId"
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Уникальный ключ команды. Повтор идентичного payload возвращает
+        исходный результат; тот же ключ с другим payload вызывает конфликт.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+        pattern: "^[A-Za-z0-9._:-]+$"
+      example: idem-session14-transfer-001
+
+  headers:
+    CorrelationId:
+      description: Идентификатор запроса для безопасной диагностики.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+      example: corr-synthetic-001
+
+  responses:
+    BadRequest:
+      description: Запрос не соответствует входному контракту.
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: VALIDATION_ERROR
+            message: Request validation failed
+            correlationId: corr-synthetic-001
+
+    Unauthorized:
+      description: Bearer token отсутствует, истёк или невалиден.
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: UNAUTHENTICATED
+            message: Authentication is required
+            correlationId: corr-synthetic-001
+
+    Forbidden:
+      description: Identity подтверждена, но роль не разрешает действие.
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: FORBIDDEN
+            message: Operation is not permitted
+            correlationId: corr-synthetic-001
+
+    NotFound:
+      description: Ресурс отсутствует или скрыт политикой object-level access.
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: RESOURCE_NOT_FOUND
+            message: Resource was not found
+            correlationId: corr-synthetic-001
+
+    Conflict:
+      description: Запрос конфликтует с текущим состоянием ресурса.
+      headers:
+        X-Correlation-ID:
+          $ref: "#/components/headers/CorrelationId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: RESOURCE_CONFLICT
+            message: Request conflicts with the current resource state
+            correlationId: corr-synthetic-001

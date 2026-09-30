@@ -1,0 +1,9 @@
+apis:
+  fintech@v1:
+    root: openapi/fintech-api.yaml
+
+extends:
+  - recommended
+
+rules:
+  no-server-example.com: off
