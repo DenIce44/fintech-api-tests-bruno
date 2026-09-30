@@ -1,0 +1,6 @@
+caseId,caseType,requirementId,postId,expectedStatus,expectedUserId,expectedBodyKind
+POST-ID-001,happy,REQ-POST-GET-001,1,200,1,resource
+POST-ID-002,boundary,REQ-POST-GET-001,100,200,10,resource
+POST-ID-003,boundary-negative,REQ-POST-GET-001,101,404,none,error
+POST-ID-004,negative,REQ-POST-GET-001,0,404,none,error
+POST-ID-005,negative,REQ-POST-GET-001,abc,404,none,error
